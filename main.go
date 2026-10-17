@@ -93,12 +93,26 @@ func translate(query string) ([]string, error) {
 	if len(args) > 0 && args[0] == "find" {
 		args = args[1:]
 	}
+	// Control chars could hide parts of the printed command (e.g. ANSI escapes masking -exec).
+	for _, a := range args {
+		if strings.IndexFunc(a, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+			return nil, fmt.Errorf("AI reply has control characters: %q", a)
+		}
+	}
 	return args, nil
 }
 
 func claude(p string) (string, error) {
-	model := env("FINDAI_MODEL", "haiku")
-	out, err := exec.Command("claude", "-p", "--model", model, p).Output()
+	// Isolate from the search directory: no project settings/hooks/CLAUDE.md, no tools, no MCP.
+	dir, err := os.MkdirTemp("", "findai")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(dir)
+	cmd := exec.Command("claude", "-p", "--model", env("FINDAI_MODEL", "haiku"),
+		"--setting-sources", "user", "--tools", "", "--strict-mcp-config", p)
+	cmd.Dir = dir
+	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("claude: %w", err)
 	}
