@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"unicode"
 )
 
 const realFind = "/usr/bin/find"
@@ -93,9 +94,10 @@ func translate(query string) ([]string, error) {
 	if len(args) > 0 && args[0] == "find" {
 		args = args[1:]
 	}
-	// Control chars could hide parts of the printed command (e.g. ANSI escapes masking -exec).
+	// Non-printable runes (C0/C1 controls, bidi overrides, zero-width) could hide parts of
+	// the printed command, e.g. masking -exec.
 	for _, a := range args {
-		if strings.IndexFunc(a, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		if strings.IndexFunc(a, func(r rune) bool { return !unicode.IsPrint(r) }) >= 0 {
 			return nil, fmt.Errorf("AI reply has control characters: %q", a)
 		}
 	}
